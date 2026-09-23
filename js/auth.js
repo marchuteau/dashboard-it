@@ -94,12 +94,18 @@ const Auth = (() => {
 const Submissions = (() => {
     const STORAGE_KEY = 'onboarding_submissions';
 
-    function getAll() {
+    async function getAll() {
+        try {
+            const res = await fetch('/api/submissions/onboarding');
+            if (res.ok) return await res.json();
+        } catch (e) { console.error('API unavailable, falling back to localStorage'); }
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     }
 
     function add(data) {
-        const submissions = getAll();
+        // No longer needed client-side — server saves on POST /api/send-onboarding
+        // Keep localStorage as offline fallback
+        const submissions = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const submission = {
             id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
             data,
@@ -110,13 +116,20 @@ const Submissions = (() => {
         return submission;
     }
 
-    function remove(id) {
-        const submissions = getAll().filter(s => s.id !== id);
+    async function remove(id) {
+        try {
+            await fetch(`/api/submissions/onboarding/${id}`, { method: 'DELETE' });
+        } catch (e) { console.error('API unavailable'); }
+        const submissions = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').filter(s => s.id !== id);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
     }
 
-    function getById(id) {
-        return getAll().find(s => s.id === id) || null;
+    async function getById(id) {
+        try {
+            const res = await fetch(`/api/submissions/onboarding/${id}`);
+            if (res.ok) return await res.json();
+        } catch (e) { console.error('API unavailable'); }
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').find(s => s.id === id) || null;
     }
 
     return { getAll, add, remove, getById };

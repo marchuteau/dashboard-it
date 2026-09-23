@@ -63,8 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ===== Onboarding Tab: Submissions =====
-    function renderSubmissions(filter = '') {
-        const submissions = Submissions.getAll();
+    async function renderSubmissions(filter = '') {
+        const submissions = await Submissions.getAll();
         const tbody = document.getElementById('submissions-body');
         const noData = document.getElementById('no-submissions');
         const filterLower = filter.toLowerCase();
@@ -116,9 +116,9 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => showDetail(btn.dataset.id));
         });
         tbody.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette soumission ?')) {
-                    Submissions.remove(btn.dataset.id);
+                    await Submissions.remove(btn.dataset.id);
                     renderSubmissions(filter);
                 }
             });
@@ -131,8 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Show detail modal
-    function showDetail(id) {
-        const submission = Submissions.getById(id);
+    async function showDetail(id) {
+        const submission = await Submissions.getById(id);
         if (!submission) return;
 
         const modal = document.getElementById('detail-modal');
@@ -215,12 +215,16 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSubmissions();
 
     // ===== Material Tab =====
-    function getMaterialSubmissions() {
+    async function getMaterialSubmissions() {
+        try {
+            const res = await fetch('/api/submissions/material');
+            if (res.ok) return await res.json();
+        } catch (e) { console.error('API unavailable, falling back to localStorage'); }
         return JSON.parse(localStorage.getItem('material_submissions') || '[]');
     }
 
-    function renderMaterial(filter = '') {
-        const submissions = getMaterialSubmissions();
+    async function renderMaterial(filter = '') {
+        const submissions = await getMaterialSubmissions();
         const tbody = document.getElementById('material-body');
         const noData = document.getElementById('no-material');
         const filterLower = filter.toLowerCase();
@@ -273,9 +277,12 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => showMaterialDetail(btn.dataset.id));
         });
         tbody.querySelectorAll('[data-action="delete-mat"]').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette demande ?')) {
-                    const subs = getMaterialSubmissions().filter(s => s.id !== btn.dataset.id);
+                    try {
+                        await fetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE' });
+                    } catch (e) { console.error('API unavailable'); }
+                    const subs = JSON.parse(localStorage.getItem('material_submissions') || '[]').filter(s => s.id !== btn.dataset.id);
                     localStorage.setItem('material_submissions', JSON.stringify(subs));
                     renderMaterial(filter);
                 }
@@ -283,9 +290,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function showMaterialDetail(id) {
-        const submissions = getMaterialSubmissions();
-        const s = submissions.find(sub => sub.id === id);
+    async function showMaterialDetail(id) {
+        let s;
+        try {
+            const res = await fetch(`/api/submissions/material/${id}`);
+            if (res.ok) s = await res.json();
+        } catch (e) { console.error('API unavailable'); }
+        if (!s) {
+            const submissions = JSON.parse(localStorage.getItem('material_submissions') || '[]');
+            s = submissions.find(sub => sub.id === id);
+        }
         if (!s) return;
 
         const modal = document.getElementById('detail-modal');

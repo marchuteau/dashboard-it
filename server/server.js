@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
+const { initDb, getDb, saveDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,13 +12,91 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Middleware
 app.use(express.json());
+
+// Block access to /server/ directory from the web
+app.use('/server', (req, res) => {
+    res.status(403).send('Forbidden');
+});
+
 app.use(express.static(path.join(__dirname, '..')));
+
+// ===== Submissions API (SQLite) =====
+
+// Onboarding
+app.get('/api/submissions/onboarding', (req, res) => {
+    const db = getDb();
+    const rows = db.exec('SELECT * FROM onboarding_submissions ORDER BY submitted_at DESC');
+    if (!rows.length) return res.json([]);
+    const submissions = rows[0].values.map(([id, data, submitted_at]) => ({
+        id, data: JSON.parse(data), submittedAt: submitted_at
+    }));
+    res.json(submissions);
+});
+
+app.get('/api/submissions/onboarding/:id', (req, res) => {
+    const db = getDb();
+    const stmt = db.prepare('SELECT * FROM onboarding_submissions WHERE id = ?');
+    stmt.bind([req.params.id]);
+    if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        return res.json({ id: row.id, data: JSON.parse(row.data), submittedAt: row.submitted_at });
+    }
+    stmt.free();
+    res.status(404).json({ error: 'Not found' });
+});
+
+app.delete('/api/submissions/onboarding/:id', (req, res) => {
+    const db = getDb();
+    db.run('DELETE FROM onboarding_submissions WHERE id = ?', [req.params.id]);
+    saveDb();
+    res.json({ success: true });
+});
+
+// Material
+app.get('/api/submissions/material', (req, res) => {
+    const db = getDb();
+    const rows = db.exec('SELECT * FROM material_submissions ORDER BY submitted_at DESC');
+    if (!rows.length) return res.json([]);
+    const submissions = rows[0].values.map(([id, data, submitted_at]) => ({
+        id, ...JSON.parse(data), submittedAt: submitted_at
+    }));
+    res.json(submissions);
+});
+
+app.get('/api/submissions/material/:id', (req, res) => {
+    const db = getDb();
+    const stmt = db.prepare('SELECT * FROM material_submissions WHERE id = ?');
+    stmt.bind([req.params.id]);
+    if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        return res.json({ id: row.id, ...JSON.parse(row.data), submittedAt: row.submitted_at });
+    }
+    stmt.free();
+    res.status(404).json({ error: 'Not found' });
+});
+
+app.delete('/api/submissions/material/:id', (req, res) => {
+    const db = getDb();
+    db.run('DELETE FROM material_submissions WHERE id = ?', [req.params.id]);
+    saveDb();
+    res.json({ success: true });
+});
 
 // Email endpoint - Onboarding
 app.post('/api/send-onboarding', async (req, res) => {
     console.log('[EMAIL] Requête reçue pour:', req.body.firstname, req.body.lastname);
     try {
         const data = req.body;
+
+        // Save to database
+        const db = getDb();
+        const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        const submittedAt = new Date().toISOString();
+        db.run('INSERT INTO onboarding_submissions (id, data, submitted_at) VALUES (?, ?, ?)', [id, JSON.stringify(data), submittedAt]);
+        saveDb();
+
         const htmlContent = buildEmailHtml(data);
 
         const msg = {
@@ -40,6 +119,14 @@ app.post('/api/send-material', async (req, res) => {
     console.log('[EMAIL] Demande matériel de:', req.body.firstname, req.body.lastname);
     try {
         const data = req.body;
+
+        // Save to database
+        const db = getDb();
+        const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        const submittedAt = new Date().toISOString();
+        db.run('INSERT INTO material_submissions (id, data, submitted_at) VALUES (?, ?, ?)', [id, JSON.stringify(data), submittedAt]);
+        saveDb();
+
         const htmlContent = buildMaterialEmailHtml(data);
 
         // Send to IT team
@@ -222,6 +309,8 @@ function buildMaterialEmailHtml(data) {
     `;
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+    await initDb();
     console.log(`✅ Serveur onboarding démarré sur http://localhost:${PORT}`);
+    console.log(`📁 Base de données: server/data/onboarding.db`);
 });

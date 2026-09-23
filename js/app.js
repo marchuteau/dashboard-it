@@ -590,16 +590,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 reason: document.querySelector('input[name="material-reason"]:checked')?.value || '',
                 items: Array.from(document.querySelectorAll('input[name="material-items"]:checked')).map(i => i.value),
                 comment: document.getElementById('material-comment').value.trim(),
-                submittedAt: new Date().toISOString(),
             };
 
-            // Save to localStorage
-            const materialSubmissions = JSON.parse(localStorage.getItem('material_submissions') || '[]');
-            matData.id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-            materialSubmissions.push(matData);
-            localStorage.setItem('material_submissions', JSON.stringify(materialSubmissions));
-
-            // Send email
+            // Send email (server also saves to DB)
             btnSubmitMat.disabled = true;
             btnSubmitMat.classList.add('is-loading');
 
