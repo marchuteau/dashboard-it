@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-logout').addEventListener('click', (e) => {
         e.preventDefault();
         localStorage.removeItem('onboarding_okta_session');
-        window.location.href = 'index.html';
+        fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(() => {
+            window.location.href = 'index.html';
+        });
     });
 
     // Show restricted tabs if user is Dashboard IT Admin
@@ -217,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== Material Tab =====
     async function getMaterialSubmissions() {
         try {
-            const res = await fetch('/api/submissions/material', { headers: { ...getAuthHeaders() } });
+            const res = await apiFetch('/api/submissions/material');
             if (res.ok) return await res.json();
         } catch (e) { console.error('API unavailable, falling back to localStorage'); }
         return JSON.parse(localStorage.getItem('material_submissions') || '[]');
@@ -280,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette demande ?')) {
                     try {
-                        await fetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE', headers: { ...getAuthHeaders() } });
+                        await apiFetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE' });
                     } catch (e) { console.error('API unavailable'); }
                     const subs = JSON.parse(localStorage.getItem('material_submissions') || '[]').filter(s => s.id !== btn.dataset.id);
                     localStorage.setItem('material_submissions', JSON.stringify(subs));
@@ -293,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showMaterialDetail(id) {
         let s;
         try {
-            const res = await fetch(`/api/submissions/material/${id}`, { headers: { ...getAuthHeaders() } });
+            const res = await apiFetch(`/api/submissions/material/${id}`);
             if (res.ok) s = await res.json();
         } catch (e) { console.error('API unavailable'); }
         if (!s) {

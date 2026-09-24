@@ -1,5 +1,6 @@
-// Server-side verification of the Okta id_token sent by the SPA as "Authorization: Bearer <token>".
-// Without this, every /api/* route was reachable by anyone (auth was UI-only, trivially bypassed with curl).
+// The raw Okta id_token is verified ONCE here (server-side, via JWKS) and never handed back to
+// the browser. The browser only gets an httpOnly session cookie afterwards (see server.js:/auth/session),
+// so client-side JS (and any XSS) has no way to read or exfiltrate the token.
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
@@ -24,33 +25,43 @@ function getSigningKey(header, callback) {
     });
 }
 
-// Verifies the Okta id_token: signature, issuer, audience, expiry, then checks the email domain.
-function requireAuth(req, res, next) {
-    if (!ISSUER || !AUDIENCE) {
-        console.error('[Auth] OKTA_ISSUER / OKTA_CLIENT_ID manquants dans .env');
-        return res.status(500).json({ error: 'Authentification non configurée côté serveur' });
-    }
+// One-time verification of the raw id_token (signature, issuer, audience, expiry, email domain).
+// Returns the safe-to-store user info, or throws.
+function verifyOktaToken(token) {
+    return new Promise((resolve, reject) => {
+        if (!ISSUER || !AUDIENCE) {
+            return reject(new Error('OKTA_ISSUER / OKTA_CLIENT_ID manquants dans .env'));
+        }
+        jwt.verify(token, getSigningKey, { issuer: ISSUER, audience: AUDIENCE, algorithms: ['RS256'] }, (err, payload) => {
+            if (err) return reject(err);
 
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token) {
+            const emailDomain = (payload.email || '').split('@')[1];
+            if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
+                return reject(new Error('Domaine non autorisé'));
+            }
+
+            resolve({
+                email: payload.email,
+                name: payload.name || payload.preferred_username || payload.email,
+                groups: Array.isArray(payload.groups) ? payload.groups : [],
+                expiresAt: payload.exp * 1000,
+            });
+        });
+    });
+}
+
+// Reads the server-side session (set once at /auth/session). No token parsing on every request.
+function requireAuth(req, res, next) {
+    const user = req.session?.user;
+    if (!user) {
         return res.status(401).json({ error: 'Authentification requise' });
     }
-
-    jwt.verify(token, getSigningKey, { issuer: ISSUER, audience: AUDIENCE, algorithms: ['RS256'] }, (err, payload) => {
-        if (err) {
-            console.warn('[Auth] Token rejeté:', err.message);
-            return res.status(401).json({ error: 'Session invalide ou expirée' });
-        }
-
-        const emailDomain = (payload.email || '').split('@')[1];
-        if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
-            return res.status(403).json({ error: 'Domaine non autorisé' });
-        }
-
-        req.user = { email: payload.email, name: payload.name, groups: payload.groups || [] };
-        next();
-    });
+    if (user.expiresAt && Date.now() > user.expiresAt) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ error: 'Session expirée' });
+    }
+    req.user = user;
+    next();
 }
 
 // Must run after requireAuth. Restricts to members of ADMIN_GROUPS (e.g. IT/RH groups).
@@ -63,4 +74,4 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+module.exports = { verifyOktaToken, requireAuth, requireAdmin };

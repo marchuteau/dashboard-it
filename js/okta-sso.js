@@ -70,8 +70,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Vérifier session existante
     const existingSession = getOktaSession();
     if (existingSession && !isSessionExpired(existingSession)) {
-        // Force re-login if session was created before groups/idToken support
-        if (!existingSession.groups || !existingSession.idToken) {
+        // Force re-login if session predates groups support, or still carries a raw token
+        // (old localStorage format) - purge it rather than leave a stale token lying around.
+        if (!existingSession.groups || existingSession.idToken) {
             localStorage.removeItem(OKTA_SESSION_KEY);
             startOktaLogin();
             return;
@@ -158,20 +159,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Créer la session
-            const groups = Array.isArray(payload.groups) ? payload.groups : [];
-            const session = {
-                email: payload.email,
-                name: payload.name || payload.preferred_username || payload.email,
-                groups: groups,
-                idToken: idToken,
-                loggedAt: Date.now(),
-                expiresAt: payload.exp * 1000,
-            };
-
-            localStorage.setItem(OKTA_SESSION_KEY, JSON.stringify(session));
-            sessionStorage.removeItem('okta_login_attempted');
-            showApp(session);
+            // Échanger le token contre une session serveur (cookie httpOnly) - le JWT brut
+            // n'est jamais stocké côté client, seul un cache d'affichage (sans secret) l'est.
+            fetch('/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ idToken }),
+            })
+                .then(res => res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status)))
+                .then(result => {
+                    const session = result.user;
+                    localStorage.setItem(OKTA_SESSION_KEY, JSON.stringify(session));
+                    sessionStorage.removeItem('okta_login_attempted');
+                    showApp(session);
+                })
+                .catch(err => {
+                    errorEl.textContent = 'Erreur lors de l\'authentification.';
+                    errorEl.style.display = 'block';
+                    ssoGate.style.display = 'flex';
+                    console.error('Okta session exchange error:', err);
+                });
         } catch (err) {
             errorEl.textContent = 'Erreur lors de l\'authentification.';
             errorEl.style.display = 'block';
@@ -352,7 +360,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function oktaLogout() {
         localStorage.removeItem(OKTA_SESSION_KEY);
-        window.location.href = `${OKTA_CONFIG.orgUrl}/login/signout?fromURI=${encodeURIComponent(OKTA_CONFIG.redirectUri)}`;
+        fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(() => {
+            window.location.href = `${OKTA_CONFIG.orgUrl}/login/signout?fromURI=${encodeURIComponent(OKTA_CONFIG.redirectUri)}`;
+        });
     }
 
     function getOktaSession() {

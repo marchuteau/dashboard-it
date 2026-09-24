@@ -1,12 +1,14 @@
-// Shared helper: attaches the Okta id_token (stored at login) to API calls so the
-// server can verify the caller's identity/groups (see server/auth-middleware.js).
-function getAuthHeaders() {
-    try {
-        const raw = localStorage.getItem('onboarding_okta_session');
-        if (!raw) return {};
-        const session = JSON.parse(raw);
-        return session.idToken ? { Authorization: 'Bearer ' + session.idToken } : {};
-    } catch (e) {
-        return {};
+// Shared fetch helper for /api/* calls. Auth is carried by an httpOnly session cookie set by
+// the server after Okta login (see server/server.js:/auth/session) - the browser attaches it
+// automatically on same-origin requests, no token handling needed here. On 401 (missing/expired
+// session) we clear the local UI cache and send the user back to the login gate.
+async function apiFetch(url, options = {}) {
+    const res = await fetch(url, { ...options, credentials: 'same-origin' });
+    if (res.status === 401) {
+        localStorage.removeItem('onboarding_okta_session');
+        if (!location.pathname.endsWith('login.html')) {
+            window.location.reload();
+        }
     }
+    return res;
 }

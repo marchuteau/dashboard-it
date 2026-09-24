@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mailing list suggestions (autocomplete), stored server-side in SQLite
     const mailingSuggestions = document.getElementById('mailing-lists-suggestions');
     if (mailingSuggestions) {
-        fetch('/api/mailing-lists', { headers: { ...getAuthHeaders() } })
+        apiFetch('/api/mailing-lists')
             .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
             .then(data => {
                 (data.groups || []).forEach(addr => {
@@ -630,9 +630,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Send email via backend
         let emailSent = false;
         try {
-            const response = await fetch('/api/send-onboarding', {
+            const response = await apiFetch('/api/send-onboarding', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData),
             });
             const result = await response.json();
@@ -853,9 +853,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let emailSent = false;
             try {
-                const response = await fetch('/api/send-material', {
+                const response = await apiFetch('/api/send-material', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(matData),
                 });
                 const result = await response.json();

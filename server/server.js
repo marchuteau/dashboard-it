@@ -2,10 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const session = require('express-session');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
 const { initDb, getDb, saveDb, getMailingLists, addMailingList } = require('./db');
-const { requireAuth, requireAdmin } = require('./auth-middleware');
+const { verifyOktaToken, requireAuth, requireAdmin } = require('./auth-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,10 +21,28 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // Basic abuse protection on the endpoints that send emails / mutate shared data
 const submitLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
 // Middleware
 app.use(express.json());
 app.use('/api', apiLimiter);
+app.use('/auth', authLimiter);
+
+// Session cookie: httpOnly so client-side JS (and any XSS) can never read it - unlike the
+// previous localStorage token approach. The Okta id_token itself is verified once (below)
+// and discarded; only this opaque, signed session cookie is given to the browser.
+app.use(session({
+    name: 'sid',
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 12 * 60 * 60 * 1000,
+    },
+}));
 
 // Block access to /server/ directory from the web
 app.use('/server', (req, res) => {
@@ -31,6 +50,26 @@ app.use('/server', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '..')));
+
+// ===== Auth session exchange =====
+// The SPA posts the raw Okta id_token here ONCE, right after login. We verify it and
+// store the resulting session server-side; the token is never sent back to the browser.
+app.post('/auth/session', async (req, res) => {
+    try {
+        const { idToken } = req.body;
+        if (!idToken) return res.status(400).json({ error: 'idToken manquant' });
+        const user = await verifyOktaToken(idToken);
+        req.session.user = user;
+        res.json({ success: true, user });
+    } catch (err) {
+        console.warn('[Auth] Echange de session refusé:', err.message);
+        res.status(401).json({ error: 'Authentification refusée' });
+    }
+});
+
+app.post('/auth/logout', (req, res) => {
+    req.session.destroy(() => res.json({ success: true }));
+});
 
 // ===== Mailing lists (SQLite) =====
 app.get('/api/mailing-lists', requireAuth, (req, res) => {
