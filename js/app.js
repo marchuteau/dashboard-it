@@ -133,6 +133,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Check required radio groups in step 3
+        if (currentStep === 3) {
+            const laptopNeeded = document.querySelector('input[name="laptop-needed"]:checked');
+            const headsetNeeded = document.querySelector('input[name="headset-needed"]:checked');
+
+            if (!laptopNeeded) {
+                valid = false;
+                highlightRadioGroup('laptop-needed');
+            }
+            if (!headsetNeeded) {
+                valid = false;
+                highlightRadioGroup('headset-needed');
+            }
+        }
+
         if (!valid) {
             showToast('Veuillez remplir tous les champs obligatoires');
         }
