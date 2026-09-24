@@ -31,7 +31,7 @@ jobs:
       - name: Build deployment artifact
         run: |
           mkdir -p ./_site
-          cp -R ./index.html ./login.html ./admin.html ./assets ./css ./js ./_site
+          cp -R ./index.html ./admin.html ./assets ./css ./js ./_site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
