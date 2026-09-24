@@ -280,40 +280,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Personal info
         const personalSection = createSummarySection('Informations personnelles', [
-            { label: 'Prénom', value: document.getElementById('firstname').value },
-            { label: 'Nom', value: document.getElementById('lastname').value },
-            { label: 'Email personnel', value: document.getElementById('personal-email').value },
-            { label: 'Email professionnel', value: document.getElementById('pro-email').value || '-' },
-            { label: "Date d'arrivée", value: formatDate(document.getElementById('start-date').value) },
-            { label: 'Date de fin', value: formatDate(document.getElementById('end-date').value) || 'Non définie' },
+            { label: 'Prénom', value: document.getElementById('firstname').value, edit: { type: 'text', target: 'firstname' } },
+            { label: 'Nom', value: document.getElementById('lastname').value, edit: { type: 'text', target: 'lastname' } },
+            { label: 'Email personnel', value: document.getElementById('personal-email').value, edit: { type: 'text', target: 'personal-email', inputType: 'email' } },
+            { label: 'Email professionnel', value: document.getElementById('pro-email').value || '-', edit: { type: 'text', target: 'pro-email', inputType: 'email' } },
+            { label: "Date d'arrivée", value: formatDate(document.getElementById('start-date').value), edit: { type: 'text', target: 'start-date', inputType: 'date' } },
+            { label: 'Date de fin', value: formatDate(document.getElementById('end-date').value) || 'Non définie', edit: { type: 'text', target: 'end-date', inputType: 'date' } },
         ], 1);
         container.appendChild(personalSection);
 
         // Contract
         const contractType = document.querySelector('input[name="contract-type"]:checked');
-        let contractTypeValue = contractType ? contractType.value : '';
-        if (contractTypeValue === 'Autre') {
+        const contractTypeRaw = contractType ? contractType.value : '';
+        let contractTypeValue = contractTypeRaw;
+        let contractTypeEdit;
+        if (contractTypeRaw === 'Autre') {
             contractTypeValue = document.getElementById('contract-type-other').value || 'Autre';
+            contractTypeEdit = { type: 'text', target: 'contract-type-other' };
+        } else {
+            contractTypeEdit = { type: 'radio', target: 'contract-type', options: getRadioOptions('contract-type') };
         }
+
         const jobTitleEl = document.getElementById('job-title');
-        let jobValue = jobTitleEl.value;
-        if (jobValue === 'Autre') {
+        const jobRaw = jobTitleEl.value;
+        let jobValue = jobRaw;
+        let jobEdit;
+        if (jobRaw === 'Autre') {
             jobValue = document.getElementById('job-title-other').value || 'Autre';
+            jobEdit = { type: 'text', target: 'job-title-other' };
+        } else {
+            jobEdit = { type: 'select', target: 'job-title' };
         }
+
         const countryVal = document.getElementById('workplace-country').value || '';
-        const cityVal = document.getElementById('workplace-city').value || '';
-        let workplaceValue = countryVal === 'Autre' 
-            ? (document.getElementById('workplace-country-other').value || 'Autre') 
-            : countryVal;
-        if (cityVal === 'Autre') {
-            workplaceValue += ' - ' + (document.getElementById('workplace-city-other').value || 'Autre');
-        } else if (cityVal) {
-            workplaceValue += ' - ' + cityVal;
+        let countryValue = countryVal;
+        let countryEdit;
+        if (countryVal === 'Autre') {
+            countryValue = document.getElementById('workplace-country-other').value || 'Autre';
+            countryEdit = { type: 'text', target: 'workplace-country-other' };
+        } else {
+            countryEdit = { type: 'select', target: 'workplace-country' };
         }
+
+        const cityVal = document.getElementById('workplace-city').value || '';
+        let cityValue = cityVal;
+        let cityEdit;
+        if (cityVal === 'Autre') {
+            cityValue = document.getElementById('workplace-city-other').value || 'Autre';
+            cityEdit = { type: 'text', target: 'workplace-city-other' };
+        } else {
+            cityEdit = { type: 'select', target: 'workplace-city' };
+        }
+
         const contractSection = createSummarySection('Contrat & Poste', [
-            { label: 'Type de contrat', value: contractTypeValue },
-            { label: 'Métier', value: jobValue },
-            { label: 'Lieu de travail', value: workplaceValue },
+            { label: 'Type de contrat', value: contractTypeValue, edit: contractTypeEdit },
+            { label: 'Métier', value: jobValue, edit: jobEdit },
+            { label: 'Pays', value: countryValue || 'Non défini', edit: countryEdit },
+            { label: 'Ville', value: cityValue || 'Non défini', edit: cityEdit },
         ], 2);
         container.appendChild(contractSection);
 
@@ -324,14 +347,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const headsetNeeded = document.querySelector('input[name="headset-needed"]:checked');
         const deskMaterials = getCheckedValues('desk-material');
         const materialRows = [
-            { label: 'Laptop', value: laptopNeeded ? laptopNeeded.value : 'Non précisé' },
+            { label: 'Laptop', value: laptopNeeded ? laptopNeeded.value : 'Non précisé', edit: { type: 'radio', target: 'laptop-needed', options: getRadioOptions('laptop-needed') } },
         ];
         if (laptopNeeded && laptopNeeded.value === 'Oui') {
-            materialRows.push({ label: 'Profil laptop', value: laptopProfile ? laptopProfile.value : 'Non défini' });
-            materialRows.push({ label: 'OS', value: laptopOs ? laptopOs.value : 'Non défini' });
+            materialRows.push({ label: 'Profil laptop', value: laptopProfile ? laptopProfile.value : 'Non défini', edit: { type: 'radio', target: 'laptop-profile', options: getRadioOptions('laptop-profile') } });
+            materialRows.push({ label: 'OS', value: laptopOs ? laptopOs.value : 'Non défini', edit: { type: 'radio', target: 'laptop-os', options: getRadioOptions('laptop-os') } });
         }
-        materialRows.push({ label: 'Casque', value: headsetNeeded ? headsetNeeded.value : 'Non précisé' });
-        materialRows.push({ label: 'Matériel bureau', value: deskMaterials.join(', ') || 'Aucun' });
+        materialRows.push({ label: 'Casque', value: headsetNeeded ? headsetNeeded.value : 'Non précisé', edit: { type: 'radio', target: 'headset-needed', options: getRadioOptions('headset-needed') } });
+        materialRows.push({ label: 'Matériel bureau', value: deskMaterials.join(', ') || 'Aucun', edit: { type: 'checkbox', target: 'desk-material', options: getRadioOptions('desk-material'), values: deskMaterials } });
         const materialSection = createSummarySection('Matériel', materialRows, 3);
         container.appendChild(materialSection);
 
@@ -376,12 +399,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function createSummarySection(title, rows, step) {
         const section = document.createElement('div');
         section.className = 'summary-section';
-        section.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        section.appendChild(heading);
         if (rows) {
             rows.forEach(row => {
                 const rowEl = document.createElement('div');
                 rowEl.className = 'summary-row';
-                rowEl.innerHTML = `<span class="label">${escapeHtml(row.label)}</span><span class="value">${escapeHtml(row.value)}</span>`;
+
+                const labelEl = document.createElement('span');
+                labelEl.className = 'label';
+                labelEl.textContent = row.label;
+                rowEl.appendChild(labelEl);
+
+                if (row.edit) {
+                    rowEl.classList.add('summary-row--editable');
+                    rowEl.appendChild(createEditableValue(row));
+                } else {
+                    const valueEl = document.createElement('span');
+                    valueEl.className = 'value';
+                    valueEl.textContent = row.value || '-';
+                    rowEl.appendChild(valueEl);
+                }
+
                 section.appendChild(rowEl);
             });
         }
@@ -391,6 +431,132 @@ document.addEventListener('DOMContentLoaded', () => {
             section.addEventListener('click', () => goToStep(step));
         }
         return section;
+    }
+
+    // Builds a value span that turns into an inline editor matching the field's original choices
+    function createEditableValue(row) {
+        const valueEl = document.createElement('span');
+        valueEl.className = 'value summary-value--editable';
+        valueEl.textContent = row.value || '-';
+        valueEl.title = 'Cliquer pour modifier cette valeur';
+        valueEl.addEventListener('click', (event) => {
+            event.stopPropagation();
+            openInlineEditor(valueEl, row);
+        });
+        return valueEl;
+    }
+
+    function openInlineEditor(valueEl, row) {
+        const edit = row.edit;
+        const wrapper = document.createElement('span');
+        wrapper.className = 'summary-inline-editor';
+        wrapper.addEventListener('click', (event) => event.stopPropagation());
+
+        if (edit.type === 'checkbox') {
+            const optionsWrap = document.createElement('div');
+            optionsWrap.className = 'summary-inline-checkboxes';
+            edit.options.forEach(opt => {
+                const label = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = opt.value;
+                cb.checked = edit.values.includes(opt.value);
+                label.appendChild(cb);
+                label.appendChild(document.createTextNode(' ' + opt.label));
+                optionsWrap.appendChild(label);
+            });
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = 'summary-inline-confirm';
+            confirmBtn.textContent = 'OK';
+            confirmBtn.addEventListener('click', () => {
+                const values = Array.from(optionsWrap.querySelectorAll('input:checked')).map(cb => cb.value);
+                document.querySelectorAll(`input[name="${edit.target}"]`).forEach(cb => {
+                    cb.checked = values.includes(cb.value);
+                });
+                generateSummary();
+            });
+            wrapper.appendChild(optionsWrap);
+            wrapper.appendChild(confirmBtn);
+            valueEl.replaceWith(wrapper);
+            return;
+        }
+
+        let control;
+        if (edit.type === 'select') {
+            const sourceSelect = document.getElementById(edit.target);
+            control = document.createElement('select');
+            control.innerHTML = sourceSelect.innerHTML;
+            control.value = sourceSelect.value;
+        } else if (edit.type === 'radio') {
+            control = document.createElement('select');
+            edit.options.forEach(opt => {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.value;
+                optionEl.textContent = opt.label;
+                control.appendChild(optionEl);
+            });
+            const checked = document.querySelector(`input[name="${edit.target}"]:checked`);
+            control.value = checked ? checked.value : '';
+        } else {
+            control = document.createElement('input');
+            control.type = edit.inputType || 'text';
+            const sourceEl = document.getElementById(edit.target);
+            control.value = sourceEl.value;
+        }
+        control.className = 'summary-inline-control';
+        wrapper.appendChild(control);
+        valueEl.replaceWith(wrapper);
+        control.focus();
+        if (control.select) control.select();
+
+        const commit = () => {
+            if (edit.type === 'select') {
+                const sourceSelect = document.getElementById(edit.target);
+                sourceSelect.value = control.value;
+                sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            } else if (edit.type === 'radio') {
+                const radio = document.querySelector(`input[name="${edit.target}"][value="${CSS.escape(control.value)}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            } else {
+                const sourceEl = document.getElementById(edit.target);
+                sourceEl.value = control.value;
+                sourceEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            generateSummary();
+        };
+
+        let committed = false;
+        const commitOnce = () => {
+            if (committed) return;
+            committed = true;
+            commit();
+        };
+
+        control.addEventListener('blur', commitOnce);
+        if (edit.type === 'select' || edit.type === 'radio') {
+            control.addEventListener('change', commitOnce);
+        }
+        control.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                commitOnce();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                committed = true;
+                generateSummary();
+            }
+        });
+    }
+
+    function getRadioOptions(name) {
+        return Array.from(document.querySelectorAll(`input[name="${name}"]`)).map(input => {
+            const content = input.nextElementSibling;
+            return { value: input.value, label: content ? content.textContent.trim() : input.value };
+        });
     }
 
     function escapeHtml(text) {
