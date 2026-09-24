@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hide/show end-date based on contract type
     const contractRadios = document.querySelectorAll('input[name="contract-type"]');
     const endDateGroup = document.getElementById('end-date-group');
+    const contractTypeOtherInput = document.getElementById('contract-type-other');
     contractRadios.forEach(radio => {
         radio.addEventListener('change', () => {
             if (radio.value === 'CDI') {
@@ -18,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('end-date').value = '';
             } else {
                 endDateGroup.style.display = '';
+            }
+            if (contractTypeOtherInput) {
+                contractTypeOtherInput.style.display = radio.value === 'Autre' ? 'block' : 'none';
             }
         });
     });
@@ -287,6 +291,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Contract
         const contractType = document.querySelector('input[name="contract-type"]:checked');
+        let contractTypeValue = contractType ? contractType.value : '';
+        if (contractTypeValue === 'Autre') {
+            contractTypeValue = document.getElementById('contract-type-other').value || 'Autre';
+        }
         const jobTitleEl = document.getElementById('job-title');
         let jobValue = jobTitleEl.value;
         if (jobValue === 'Autre') {
@@ -303,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             workplaceValue += ' - ' + cityVal;
         }
         const contractSection = createSummarySection('Contrat & Poste', [
-            { label: 'Type de contrat', value: contractType ? contractType.value : '' },
+            { label: 'Type de contrat', value: contractTypeValue },
             { label: 'Métier', value: jobValue },
             { label: 'Lieu de travail', value: workplaceValue },
         ]);
@@ -463,6 +471,11 @@ document.addEventListener('DOMContentLoaded', () => {
             jobValue = document.getElementById('job-title-other').value || 'Autre';
         }
 
+        let contractTypeValue = document.querySelector('input[name="contract-type"]:checked')?.value || '';
+        if (contractTypeValue === 'Autre') {
+            contractTypeValue = document.getElementById('contract-type-other').value || 'Autre';
+        }
+
         return {
             firstname: document.getElementById('firstname').value,
             lastname: document.getElementById('lastname').value,
@@ -470,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
             proEmail: document.getElementById('pro-email').value,
             startDate: document.getElementById('start-date').value,
             endDate: document.getElementById('end-date').value,
-            contractType: document.querySelector('input[name="contract-type"]:checked')?.value || '',
+            contractType: contractTypeValue,
             jobTitle: jobValue,
             workplace: workplaceValue,
             laptopNeeded: document.querySelector('input[name="laptop-needed"]:checked')?.value || '',
