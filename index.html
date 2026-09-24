@@ -627,6 +627,7 @@
                     <li class="step-item" data-mat-step="2"><span class="step-number">2</span><span class="step-label" data-i18n="mat.step1">Lieu d'utilisation</span></li>
                     <li class="step-item" data-mat-step="3"><span class="step-number">3</span><span class="step-label" data-i18n="mat.step2">Matériel</span></li>
                     <li class="step-item" data-mat-step="4"><span class="step-number">4</span><span class="step-label" data-i18n="mat.step3">Commentaire</span></li>
+                    <li class="step-item" data-mat-step="5"><span class="step-number">5</span><span class="step-label" data-i18n="mat.step4">Récapitulatif</span></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
@@ -740,6 +741,15 @@
                             <textarea id="material-comment" name="material-comment" rows="5" placeholder="Exemple : besoin d'un écran 27 pouces, casque avec micro pour visioconférences, etc." data-i18n-placeholder="mat.comment.placeholder"></textarea>
                         </div>
                     </div>
+                </section>
+
+                <!-- Mat Step 5: Summary -->
+                <section class="form-step" data-mat-step="5">
+                    <div class="step-header">
+                        <h1 data-i18n="mat.step4.title">Récapitulatif</h1>
+                        <p data-i18n="mat.step4.subtitle">Vérifiez les informations avant l'envoi de votre demande</p>
+                    </div>
+                    <div class="summary-content" id="mat-summary-content"></div>
                 </section>
 
                 <div class="form-navigation">

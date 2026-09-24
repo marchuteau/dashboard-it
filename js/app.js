@@ -426,7 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(mlSection);
     }
 
-    function createSummarySection(title, rows, step) {
+    function createSummarySection(title, rows, step, opts = {}) {
+        const navigate = opts.navigate || goToStep;
         const section = document.createElement('div');
         section.className = 'summary-section';
         const heading = document.createElement('h3');
@@ -444,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (row.edit) {
                     rowEl.classList.add('summary-row--editable');
-                    rowEl.appendChild(createEditableValue(row));
+                    rowEl.appendChild(createEditableValue(row, opts));
                 } else {
                     const valueEl = document.createElement('span');
                     valueEl.className = 'value';
@@ -458,25 +459,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (step) {
             section.classList.add('summary-section--clickable');
             section.title = 'Cliquer pour modifier cette étape';
-            section.addEventListener('click', () => goToStep(step));
+            section.addEventListener('click', () => navigate(step));
         }
         return section;
     }
 
     // Builds a value span that turns into an inline editor matching the field's original choices
-    function createEditableValue(row) {
+    function createEditableValue(row, opts = {}) {
         const valueEl = document.createElement('span');
         valueEl.className = 'value summary-value--editable';
         valueEl.textContent = row.value || '-';
         valueEl.title = 'Cliquer pour modifier cette valeur';
         valueEl.addEventListener('click', (event) => {
             event.stopPropagation();
-            openInlineEditor(valueEl, row);
+            openInlineEditor(valueEl, row, opts);
         });
         return valueEl;
     }
 
-    function openInlineEditor(valueEl, row) {
+    function openInlineEditor(valueEl, row, opts = {}) {
+        const refresh = opts.refresh || generateSummary;
         const edit = row.edit;
         const wrapper = document.createElement('span');
         wrapper.className = 'summary-inline-editor';
@@ -504,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll(`input[name="${edit.target}"]`).forEach(cb => {
                     cb.checked = values.includes(cb.value);
                 });
-                generateSummary();
+                refresh();
             });
             wrapper.appendChild(optionsWrap);
             wrapper.appendChild(confirmBtn);
@@ -528,6 +530,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const checked = document.querySelector(`input[name="${edit.target}"]:checked`);
             control.value = checked ? checked.value : '';
+        } else if (edit.type === 'textarea') {
+            control = document.createElement('textarea');
+            control.rows = 3;
+            const sourceEl = document.getElementById(edit.target);
+            control.value = sourceEl.value;
         } else {
             control = document.createElement('input');
             control.type = edit.inputType || 'text';
@@ -556,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sourceEl.value = control.value;
                 sourceEl.dispatchEvent(new Event('change', { bubbles: true }));
             }
-            generateSummary();
+            refresh();
         };
 
         let committed = false;
@@ -571,13 +578,13 @@ document.addEventListener('DOMContentLoaded', () => {
             control.addEventListener('change', commitOnce);
         }
         control.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && edit.type !== 'textarea') {
                 event.preventDefault();
                 commitOnce();
             } else if (event.key === 'Escape') {
                 event.preventDefault();
                 committed = true;
-                generateSummary();
+                refresh();
             }
         });
     }
@@ -737,10 +744,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentMatStep === totalMatSteps) {
                 btnMatNext.style.display = 'none';
                 btnSubmitMat.style.display = 'inline-flex';
+                generateMatSummary();
             } else {
                 btnMatNext.style.display = 'inline-flex';
                 btnSubmitMat.style.display = 'none';
             }
+        }
+
+        // Builds the material request recap, with the same clickable/editable sections as onboarding
+        function generateMatSummary() {
+            const container = document.getElementById('mat-summary-content');
+            container.innerHTML = '';
+            const matOpts = { navigate: goToMatStep, refresh: generateMatSummary };
+
+            const infoSection = createSummarySection('Vos informations', [
+                { label: 'Prénom', value: document.getElementById('mat-firstname').value, edit: { type: 'text', target: 'mat-firstname' } },
+                { label: 'Nom', value: document.getElementById('mat-lastname').value, edit: { type: 'text', target: 'mat-lastname' } },
+                { label: 'Email', value: document.getElementById('mat-email').value, edit: { type: 'text', target: 'mat-email', inputType: 'email' } },
+            ], 1, matOpts);
+            container.appendChild(infoSection);
+
+            const typeChecked = document.querySelector('input[name="material-type"]:checked');
+            const placeSection = createSummarySection("Lieu d'utilisation", [
+                { label: 'Lieu', value: typeChecked ? typeChecked.value : 'Non précisé', edit: { type: 'radio', target: 'material-type', options: getRadioOptions('material-type') } },
+            ], 2, matOpts);
+            container.appendChild(placeSection);
+
+            const reasonChecked = document.querySelector('input[name="material-reason"]:checked');
+            const itemsChecked = getCheckedValues('material-items');
+            const materialSection = createSummarySection('Matériel', [
+                { label: 'Raison', value: reasonChecked ? reasonChecked.value : 'Non précisée', edit: { type: 'radio', target: 'material-reason', options: getRadioOptions('material-reason') } },
+                { label: 'Matériel souhaité', value: itemsChecked.join(', ') || 'Aucun', edit: { type: 'checkbox', target: 'material-items', options: getRadioOptions('material-items'), values: itemsChecked } },
+            ], 3, matOpts);
+            container.appendChild(materialSection);
+
+            const commentSection = createSummarySection('Commentaire', [
+                { label: 'Commentaire', value: document.getElementById('material-comment').value || 'Aucun', edit: { type: 'textarea', target: 'material-comment' } },
+            ], 4, matOpts);
+            container.appendChild(commentSection);
         }
 
         btnMatNext.addEventListener('click', () => {
