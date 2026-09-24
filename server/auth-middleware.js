@@ -34,7 +34,13 @@ function verifyOktaToken(token) {
             return reject(new Error('OKTA_ISSUER / OKTA_CLIENT_ID manquants dans .env'));
         }
         jwt.verify(token, getSigningKey, { issuer: ISSUER, audience: AUDIENCE, algorithms: ['RS256'] }, (err, payload) => {
-            if (err) return reject(err);
+            if (err) {
+                // Log the actual iss/aud claims (unverified, for diagnostics only) to pinpoint
+                // config mismatches without ever logging the token itself.
+                const unverified = jwt.decode(token) || {};
+                console.warn(`[Auth] Claims re\u00e7us - iss: ${unverified.iss}, aud: ${unverified.aud}`);
+                return reject(err);
+            }
 
             const emailDomain = (payload.email || '').split('@')[1];
             if (!emailDomain || !ALLOWED_DOMAINS.includes(emailDomain)) {
