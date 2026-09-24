@@ -12,7 +12,6 @@ const OKTA_CONFIG = {
 };
 
 const ALLOWED_DOMAINS = ['recommerce.com', 'circularx.com'];
-const OKTA_SESSION_KEY = 'onboarding_okta_session';
 
 document.addEventListener('DOMContentLoaded', () => {
     const ssoGate = document.getElementById('sso-gate');
@@ -67,33 +66,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // 2. Vérifier session existante
-    const existingSession = getOktaSession();
-    if (existingSession && !isSessionExpired(existingSession)) {
-        // Force re-login if session predates groups support, or still carries a raw token
-        // (old localStorage format) - purge it rather than leave a stale token lying around.
-        if (!existingSession.groups || existingSession.idToken) {
-            localStorage.removeItem(OKTA_SESSION_KEY);
+    // 2. Vérifier la session existante côté serveur (cookie httpOnly) - rien en localStorage
+    fetch('/auth/me', { credentials: 'same-origin' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.authenticated) {
+                showApp(data.user);
+            } else {
+                continueUnauthenticated();
+            }
+        })
+        .catch(() => continueUnauthenticated());
+
+    function continueUnauthenticated() {
+        // 3. Auto-login uniquement si on arrive depuis le dashboard Okta (paramètre iss)
+        if (issParam && !sessionStorage.getItem('okta_login_attempted')) {
+            sessionStorage.setItem('okta_login_attempted', '1');
             startOktaLogin();
             return;
         }
-        showApp(existingSession);
-        return;
-    }
+        sessionStorage.removeItem('okta_login_attempted');
 
-    // 3. Auto-login uniquement si on arrive depuis le dashboard Okta (paramètre iss)
-    if (issParam && !sessionStorage.getItem('okta_login_attempted')) {
-        sessionStorage.setItem('okta_login_attempted', '1');
-        startOktaLogin();
-        return;
-    }
-    sessionStorage.removeItem('okta_login_attempted');
-
-    // 4. Fallback : afficher la gate avec bouton
-    ssoGate.style.display = 'flex';
-    const loginBtn = document.getElementById('okta-login-btn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', startOktaLogin);
+        // 4. Fallback : afficher la gate avec bouton
+        ssoGate.style.display = 'flex';
+        const loginBtn = document.getElementById('okta-login-btn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', startOktaLogin);
+        }
     }
 
     function startOktaLogin() {
@@ -169,10 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
             })
                 .then(res => res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status)))
                 .then(result => {
-                    const session = result.user;
-                    localStorage.setItem(OKTA_SESSION_KEY, JSON.stringify(session));
                     sessionStorage.removeItem('okta_login_attempted');
-                    showApp(session);
+                    showApp(result.user);
                 })
                 .catch(err => {
                     errorEl.textContent = 'Erreur lors de l\'authentification.';
@@ -190,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showApp(session) {
         ssoGate.style.display = 'none';
+        document.dispatchEvent(new CustomEvent('app:authenticated', { detail: session }));
 
         // If home screen exists, show it instead of app directly
         const homeScreen = document.getElementById('home-screen');
@@ -359,19 +357,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function oktaLogout() {
-        localStorage.removeItem(OKTA_SESSION_KEY);
         fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(() => {
             window.location.href = `${OKTA_CONFIG.orgUrl}/login/signout?fromURI=${encodeURIComponent(OKTA_CONFIG.redirectUri)}`;
         });
-    }
-
-    function getOktaSession() {
-        const data = localStorage.getItem(OKTA_SESSION_KEY);
-        return data ? JSON.parse(data) : null;
-    }
-
-    function isSessionExpired(session) {
-        return session.expiresAt && Date.now() > session.expiresAt;
     }
 
     function decodeJwtPayload(token) {

@@ -5,8 +5,8 @@ const rateLimit = require('express-rate-limit');
 const session = require('express-session');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
-const { initDb, getDb, saveDb, getMailingLists, addMailingList } = require('./db');
-const { verifyOktaToken, requireAuth, requireAdmin } = require('./auth-middleware');
+const { initDb, getDb, saveDb, getMailingLists, addMailingList, getLicences, addLicence, adjustLicenceUsage, deleteLicence, getUserLang, setUserLang } = require('./db');
+const { verifyOktaToken, requireAuth, requireAdmin, requireITAdmin } = require('./auth-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,6 +69,55 @@ app.post('/auth/session', async (req, res) => {
 
 app.post('/auth/logout', (req, res) => {
     req.session.destroy(() => res.json({ success: true }));
+});
+
+// Lets the SPA know if it already has a valid session, without ever exposing a token.
+app.get('/auth/me', (req, res) => {
+    const user = req.session?.user;
+    if (!user || (user.expiresAt && Date.now() > user.expiresAt)) {
+        return res.json({ authenticated: false });
+    }
+    res.json({ authenticated: true, user });
+});
+
+// ===== User preferences (SQLite) - replaces the old localStorage "app-lang" =====
+app.get('/api/preferences', requireAuth, (req, res) => {
+    res.json({ lang: getUserLang(req.user.email) });
+});
+
+app.post('/api/preferences', requireAuth, (req, res) => {
+    const lang = (req.body.lang || '').trim();
+    if (!['fr', 'en'].includes(lang)) return res.status(400).json({ error: 'Langue invalide' });
+    setUserLang(req.user.email, lang);
+    saveDb();
+    res.json({ success: true });
+});
+
+// ===== Licences (SQLite) - IT Admin only =====
+app.get('/api/licences', requireAuth, requireITAdmin, (req, res) => {
+    res.json(getLicences());
+});
+
+app.post('/api/licences', requireAuth, requireITAdmin, (req, res) => {
+    const { type, key, totalUses } = req.body;
+    if (!type || !key || !totalUses) return res.status(400).json({ error: 'Champs manquants' });
+    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    addLicence({ id, type, key, totalUses: parseInt(totalUses, 10) || 1 });
+    saveDb();
+    res.json({ success: true, id });
+});
+
+app.patch('/api/licences/:id', requireAuth, requireITAdmin, (req, res) => {
+    const delta = req.body.delta === -1 ? -1 : 1;
+    adjustLicenceUsage(req.params.id, delta);
+    saveDb();
+    res.json({ success: true });
+});
+
+app.delete('/api/licences/:id', requireAuth, requireITAdmin, (req, res) => {
+    deleteLicence(req.params.id);
+    saveDb();
+    res.json({ success: true });
 });
 
 // ===== Mailing lists (SQLite) =====

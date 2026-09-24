@@ -292,8 +292,9 @@ const translations = {
     }
 };
 
-// Current language
-let currentLang = localStorage.getItem('app-lang') || 'fr';
+// Current language: default from the browser; overridden below by the saved DB preference
+// once the user is authenticated (no localStorage involved).
+let currentLang = (navigator.language || 'fr').toLowerCase().startsWith('en') ? 'en' : 'fr';
 
 function t(key) {
     return translations[currentLang]?.[key] || translations['fr']?.[key] || key;
@@ -301,10 +302,16 @@ function t(key) {
 
 function setLanguage(lang) {
     currentLang = lang;
-    localStorage.setItem('app-lang', lang);
     document.documentElement.lang = lang;
     applyTranslations();
     updateLangSwitcher();
+    // Best-effort: persists server-side only if logged in; silently ignored otherwise.
+    fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ lang }),
+    }).catch(() => {});
 }
 
 function updateLangSwitcher() {
@@ -355,4 +362,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Apply initial language
     document.documentElement.lang = currentLang;
     applyTranslations();
+
+    // Best-effort: load the saved preference from the DB if the user is already logged in.
+    fetch('/api/preferences', { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (data && data.lang && data.lang !== currentLang) {
+                currentLang = data.lang;
+                document.documentElement.lang = currentLang;
+                applyTranslations();
+                updateLangSwitcher();
+            }
+        })
+        .catch(() => {});
 });

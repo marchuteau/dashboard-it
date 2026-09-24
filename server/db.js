@@ -33,6 +33,22 @@ async function initDb() {
         )
     `);
     db.run(`
+        CREATE TABLE IF NOT EXISTS licences (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            key TEXT NOT NULL,
+            total_uses INTEGER NOT NULL,
+            used_count INTEGER NOT NULL DEFAULT 0,
+            added_at TEXT NOT NULL
+        )
+    `);
+    db.run(`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            email TEXT PRIMARY KEY,
+            lang TEXT NOT NULL DEFAULT 'fr'
+        )
+    `);
+    db.run(`
         CREATE TABLE IF NOT EXISTS mailing_lists (
             address TEXT PRIMARY KEY,
             created_at TEXT NOT NULL
@@ -92,4 +108,42 @@ function addMailingList(address) {
     db.run('INSERT OR IGNORE INTO mailing_lists (address, created_at) VALUES (?, ?)', [trimmed, new Date().toISOString()]);
 }
 
-module.exports = { initDb, getDb, saveDb, getMailingLists, addMailingList };
+function getLicences() {
+    const rows = db.exec('SELECT id, type, key, total_uses, used_count, added_at FROM licences ORDER BY added_at DESC');
+    if (!rows.length) return [];
+    return rows[0].values.map(([id, type, key, totalUses, usedCount, addedAt]) => ({
+        id, type, key, totalUses, usedCount, addedAt
+    }));
+}
+
+function addLicence({ id, type, key, totalUses }) {
+    db.run('INSERT INTO licences (id, type, key, total_uses, used_count, added_at) VALUES (?, ?, ?, ?, 0, ?)',
+        [id, type, key, totalUses, new Date().toISOString()]);
+}
+
+function adjustLicenceUsage(id, delta) {
+    db.run('UPDATE licences SET used_count = MAX(0, MIN(total_uses, used_count + ?)) WHERE id = ?', [delta, id]);
+}
+
+function deleteLicence(id) {
+    db.run('DELETE FROM licences WHERE id = ?', [id]);
+}
+
+function getUserLang(email) {
+    const stmt = db.prepare('SELECT lang FROM user_preferences WHERE email = ?');
+    stmt.bind([email]);
+    let lang = 'fr';
+    if (stmt.step()) lang = stmt.getAsObject().lang;
+    stmt.free();
+    return lang;
+}
+
+function setUserLang(email, lang) {
+    db.run('INSERT INTO user_preferences (email, lang) VALUES (?, ?) ON CONFLICT(email) DO UPDATE SET lang = excluded.lang', [email, lang]);
+}
+
+module.exports = {
+    initDb, getDb, saveDb, getMailingLists, addMailingList,
+    getLicences, addLicence, adjustLicenceUsage, deleteLicence,
+    getUserLang, setUserLang,
+};

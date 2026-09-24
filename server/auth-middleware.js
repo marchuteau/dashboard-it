@@ -10,6 +10,7 @@ const ALLOWED_DOMAINS = (process.env.ALLOWED_EMAIL_DOMAINS || 'recommerce.com,ci
     .split(',').map(d => d.trim()).filter(Boolean);
 const ADMIN_GROUPS = (process.env.ADMIN_GROUPS || '')
     .split(',').map(g => g.trim()).filter(Boolean);
+const IT_ADMIN_GROUP = process.env.IT_ADMIN_GROUP || 'Dashboard IT Admin';
 
 const jwks = ISSUER ? jwksClient({
     jwksUri: `${ISSUER}/v1/keys`,
@@ -74,4 +75,13 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-module.exports = { verifyOktaToken, requireAuth, requireAdmin };
+// Must run after requireAuth. Restricts to the IT Admin group only (e.g. licence management).
+function requireITAdmin(req, res, next) {
+    const groups = req.user?.groups || [];
+    if (!groups.includes(IT_ADMIN_GROUP)) {
+        return res.status(403).json({ error: 'Accès réservé aux administrateurs IT' });
+    }
+    next();
+}
+
+module.exports = { verifyOktaToken, requireAuth, requireAdmin, requireITAdmin };

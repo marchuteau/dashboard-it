@@ -288,12 +288,17 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(entry);
     });
 
-    // Mailing list suggestions (autocomplete), stored server-side in SQLite
+    // Mailing list suggestions (autocomplete), stored server-side in SQLite.
+    // Plain fetch (not apiFetch) on purpose: this runs eagerly on page load, before the SSO
+    // login exchange may have completed, so a 401 here must be ignored silently rather than
+    // trigger apiFetch's reload-on-401 behavior (which would cause a reload loop pre-login).
     const mailingSuggestions = document.getElementById('mailing-lists-suggestions');
-    if (mailingSuggestions) {
-        apiFetch('/api/mailing-lists')
+    function loadMailingSuggestions() {
+        if (!mailingSuggestions) return;
+        fetch('/api/mailing-lists', { credentials: 'same-origin' })
             .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
             .then(data => {
+                mailingSuggestions.innerHTML = '';
                 (data.groups || []).forEach(addr => {
                     const option = document.createElement('option');
                     option.value = addr;
@@ -302,6 +307,10 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(() => {});
     }
+    loadMailingSuggestions();
+    // Retry once the user is confirmed authenticated (the first attempt above may run before
+    // the Okta session exchange completes and fail with 401).
+    document.addEventListener('app:authenticated', loadMailingSuggestions);
 
     // Generate Summary
     function generateSummary() {
@@ -616,11 +625,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSubmit.addEventListener('click', async () => {
         const formData = collectFormData();
         console.log('Form submitted:', formData);
-        
-        // Save submission
-        if (typeof Submissions !== 'undefined') {
-            Submissions.add(formData);
-        }
 
         // Disable button during send
         btnSubmit.disabled = true;
@@ -946,7 +950,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Submit licence
-        document.getElementById('btn-submit-licence').addEventListener('click', () => {
+        document.getElementById('btn-submit-licence').addEventListener('click', async () => {
             const typeRadio = document.querySelector('input[name="licence-type"]:checked');
             if (!typeRadio) {
                 highlightRadioGroup('licence-type');
@@ -961,19 +965,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const count = parseInt(document.getElementById('licence-count').value) || 1;
 
-            const licence = {
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                type: typeRadio.value,
-                key: fullKey,
-                totalUses: count,
-                usedCount: 0,
-                addedAt: new Date().toISOString(),
-            };
-
-            // Save to localStorage
-            const licences = JSON.parse(localStorage.getItem('licences') || '[]');
-            licences.push(licence);
-            localStorage.setItem('licences', JSON.stringify(licences));
+            const res = await apiFetch('/api/licences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: typeRadio.value, key: fullKey, totalUses: count }),
+            });
+            if (!res.ok) {
+                alert("Erreur lors de l'enregistrement de la licence.");
+                return;
+            }
 
             // Show success
             const formContainer = licenceContainer.querySelector('.form-container');

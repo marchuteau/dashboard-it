@@ -1,19 +1,17 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Check auth - support both legacy Auth and Okta SSO session
-    const oktaSession = localStorage.getItem('onboarding_okta_session');
-    let session;
-
-    if (oktaSession) {
-        session = JSON.parse(oktaSession);
-        const userGroups = session.groups || [];
-        const isITAdmin = userGroups.includes('Dashboard IT Admin');
-        const isRH = userGroups.includes('Recommerce Solutions (FR) - Ressources Humaines');
-        if (!isITAdmin && !isRH) {
-            alert('Accès réservé aux administrateurs.');
-            window.location.href = 'index.html';
-            return;
-        }
-    } else {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check auth server-side (httpOnly session cookie) - nothing read from localStorage
+    const authRes = await fetch('/auth/me', { credentials: 'same-origin' });
+    const authData = await authRes.json();
+    if (!authData.authenticated) {
+        window.location.href = 'index.html';
+        return;
+    }
+    const session = authData.user;
+    const userGroups = session.groups || [];
+    const isITAdmin = userGroups.includes('Dashboard IT Admin');
+    const isRH = userGroups.includes('Recommerce Solutions (FR) - Ressources Humaines');
+    if (!isITAdmin && !isRH) {
+        alert('Accès réservé aux administrateurs.');
         window.location.href = 'index.html';
         return;
     }
@@ -23,15 +21,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Logout
     document.getElementById('btn-logout').addEventListener('click', (e) => {
         e.preventDefault();
-        localStorage.removeItem('onboarding_okta_session');
         fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(() => {
             window.location.href = 'index.html';
         });
     });
 
     // Show restricted tabs if user is Dashboard IT Admin
-    const userGroups = session.groups || [];
-    const isITAdmin = userGroups.includes('Dashboard IT Admin');
     if (isITAdmin) {
         document.querySelectorAll('.restricted-tab').forEach(tab => {
             tab.style.display = 'flex';
@@ -66,7 +61,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== Onboarding Tab: Submissions =====
     async function renderSubmissions(filter = '') {
-        const submissions = await Submissions.getAll();
+        let submissions;
+        try {
+            submissions = await Submissions.getAll();
+        } catch (e) {
+            console.error('Impossible de charger les soumissions:', e);
+            document.getElementById('submissions-body').innerHTML = '';
+            document.getElementById('no-submissions').style.display = 'flex';
+            return;
+        }
         const tbody = document.getElementById('submissions-body');
         const noData = document.getElementById('no-submissions');
         const filterLower = filter.toLowerCase();
@@ -218,15 +221,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== Material Tab =====
     async function getMaterialSubmissions() {
-        try {
-            const res = await apiFetch('/api/submissions/material');
-            if (res.ok) return await res.json();
-        } catch (e) { console.error('API unavailable, falling back to localStorage'); }
-        return JSON.parse(localStorage.getItem('material_submissions') || '[]');
+        const res = await apiFetch('/api/submissions/material');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
     }
 
     async function renderMaterial(filter = '') {
-        const submissions = await getMaterialSubmissions();
+        let submissions;
+        try {
+            submissions = await getMaterialSubmissions();
+        } catch (e) {
+            console.error('Impossible de charger les demandes de matériel:', e);
+            document.getElementById('material-body').innerHTML = '';
+            document.getElementById('no-material').style.display = 'flex';
+            return;
+        }
         const tbody = document.getElementById('material-body');
         const noData = document.getElementById('no-material');
         const filterLower = filter.toLowerCase();
@@ -281,11 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.querySelectorAll('[data-action="delete-mat"]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette demande ?')) {
-                    try {
-                        await apiFetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE' });
-                    } catch (e) { console.error('API unavailable'); }
-                    const subs = JSON.parse(localStorage.getItem('material_submissions') || '[]').filter(s => s.id !== btn.dataset.id);
-                    localStorage.setItem('material_submissions', JSON.stringify(subs));
+                    await apiFetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE' });
                     renderMaterial(filter);
                 }
             });
@@ -293,16 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function showMaterialDetail(id) {
-        let s;
-        try {
-            const res = await apiFetch(`/api/submissions/material/${id}`);
-            if (res.ok) s = await res.json();
-        } catch (e) { console.error('API unavailable'); }
-        if (!s) {
-            const submissions = JSON.parse(localStorage.getItem('material_submissions') || '[]');
-            s = submissions.find(sub => sub.id === id);
-        }
-        if (!s) return;
+        const res = await apiFetch(`/api/submissions/material/${id}`);
+        if (!res.ok) return;
+        const s = await res.json();
 
         const modal = document.getElementById('detail-modal');
         const body = document.getElementById('modal-body');
@@ -339,16 +337,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMaterial();
 
     // ===== Licences Tab =====
-    function getLicences() {
-        return JSON.parse(localStorage.getItem('licences') || '[]');
+    async function getLicences() {
+        const res = await apiFetch('/api/licences');
+        if (!res.ok) return [];
+        return await res.json();
     }
 
-    function saveLicences(licences) {
-        localStorage.setItem('licences', JSON.stringify(licences));
-    }
-
-    function renderLicences() {
-        const licences = getLicences();
+    async function renderLicences() {
+        const licences = await getLicences();
         const winLicences = licences.filter(l => l.type === 'Windows 11 Pro');
         const officeLicences = licences.filter(l => l.type === 'Microsoft Office 365');
 
@@ -433,36 +429,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Use licence
         tbody.querySelectorAll('[data-action="use-licence"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const licences = getLicences();
-                const lic = licences.find(l => l.id === btn.dataset.id);
-                if (lic && lic.usedCount < lic.totalUses) {
-                    lic.usedCount++;
-                    saveLicences(licences);
-                    renderLicences();
-                }
+            btn.addEventListener('click', async () => {
+                await apiFetch(`/api/licences/${btn.dataset.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ delta: 1 }),
+                });
+                renderLicences();
             });
         });
 
         // Free licence
         tbody.querySelectorAll('[data-action="free-licence"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const licences = getLicences();
-                const lic = licences.find(l => l.id === btn.dataset.id);
-                if (lic && lic.usedCount > 0) {
-                    lic.usedCount--;
-                    saveLicences(licences);
-                    renderLicences();
-                }
+            btn.addEventListener('click', async () => {
+                await apiFetch(`/api/licences/${btn.dataset.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ delta: -1 }),
+                });
+                renderLicences();
             });
         });
 
         // Delete licence
         tbody.querySelectorAll('[data-action="delete-licence"]').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette licence ?')) {
-                    const licences = getLicences().filter(l => l.id !== btn.dataset.id);
-                    saveLicences(licences);
+                    await apiFetch(`/api/licences/${btn.dataset.id}`, { method: 'DELETE' });
                     renderLicences();
                 }
             });
