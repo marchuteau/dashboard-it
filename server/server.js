@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
-const { initDb, getDb, saveDb } = require('./db');
+const { initDb, getDb, saveDb, getMailingLists, addMailingList } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +19,19 @@ app.use('/server', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '..')));
+
+// ===== Mailing lists (SQLite) =====
+app.get('/api/mailing-lists', (req, res) => {
+    res.json({ groups: getMailingLists() });
+});
+
+app.post('/api/mailing-lists', (req, res) => {
+    const address = (req.body.address || '').trim();
+    if (!address) return res.status(400).json({ error: 'Adresse manquante' });
+    addMailingList(address);
+    saveDb();
+    res.json({ success: true, groups: getMailingLists() });
+});
 
 // ===== Submissions API (SQLite) =====
 
@@ -95,6 +108,9 @@ app.post('/api/send-onboarding', async (req, res) => {
         const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
         const submittedAt = new Date().toISOString();
         db.run('INSERT INTO onboarding_submissions (id, data, submitted_at) VALUES (?, ?, ?)', [id, JSON.stringify(data), submittedAt]);
+
+        // Auto-learn any mailing list address the user typed that isn't known yet
+        (data.mailingLists || []).forEach(addMailingList);
         saveDb();
 
         const htmlContent = buildEmailHtml(data);

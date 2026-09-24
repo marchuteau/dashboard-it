@@ -268,10 +268,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('mailing-list-container');
         const entry = document.createElement('div');
         entry.className = 'mailing-list-entry';
-        entry.innerHTML = '<input type="email" name="mailing-lists[]" placeholder="Ex: team-dev@recommerce.com"><button type="button" class="btn-remove-mailing" title="Supprimer"><span class="material-icons">close</span></button>';
+        entry.innerHTML = '<input type="email" name="mailing-lists[]" placeholder="Ex: team-dev@recommerce.com" list="mailing-lists-suggestions" autocomplete="off"><button type="button" class="btn-remove-mailing" title="Supprimer"><span class="material-icons">close</span></button>';
         entry.querySelector('.btn-remove-mailing').addEventListener('click', () => entry.remove());
         container.appendChild(entry);
     });
+
+    // Mailing list suggestions (autocomplete), stored server-side in SQLite
+    const mailingSuggestions = document.getElementById('mailing-lists-suggestions');
+    if (mailingSuggestions) {
+        fetch('/api/mailing-lists')
+            .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+            .then(data => {
+                (data.groups || []).forEach(addr => {
+                    const option = document.createElement('option');
+                    option.value = addr;
+                    mailingSuggestions.appendChild(option);
+                });
+            })
+            .catch(() => {});
+    }
 
     // Generate Summary
     function generateSummary() {
