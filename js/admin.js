@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== Material Tab =====
     async function getMaterialSubmissions() {
         try {
-            const res = await fetch('/api/submissions/material');
+            const res = await fetch('/api/submissions/material', { headers: { ...getAuthHeaders() } });
             if (res.ok) return await res.json();
         } catch (e) { console.error('API unavailable, falling back to localStorage'); }
         return JSON.parse(localStorage.getItem('material_submissions') || '[]');
@@ -280,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', async () => {
                 if (confirm('Supprimer cette demande ?')) {
                     try {
-                        await fetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE' });
+                        await fetch(`/api/submissions/material/${btn.dataset.id}`, { method: 'DELETE', headers: { ...getAuthHeaders() } });
                     } catch (e) { console.error('API unavailable'); }
                     const subs = JSON.parse(localStorage.getItem('material_submissions') || '[]').filter(s => s.id !== btn.dataset.id);
                     localStorage.setItem('material_submissions', JSON.stringify(subs));
@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showMaterialDetail(id) {
         let s;
         try {
-            const res = await fetch(`/api/submissions/material/${id}`);
+            const res = await fetch(`/api/submissions/material/${id}`, { headers: { ...getAuthHeaders() } });
             if (res.ok) s = await res.json();
         } catch (e) { console.error('API unavailable'); }
         if (!s) {

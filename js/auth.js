@@ -96,7 +96,7 @@ const Submissions = (() => {
 
     async function getAll() {
         try {
-            const res = await fetch('/api/submissions/onboarding');
+            const res = await fetch('/api/submissions/onboarding', { headers: { ...authHeaders() } });
             if (res.ok) return await res.json();
         } catch (e) { console.error('API unavailable, falling back to localStorage'); }
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -118,7 +118,7 @@ const Submissions = (() => {
 
     async function remove(id) {
         try {
-            await fetch(`/api/submissions/onboarding/${id}`, { method: 'DELETE' });
+            await fetch(`/api/submissions/onboarding/${id}`, { method: 'DELETE', headers: { ...authHeaders() } });
         } catch (e) { console.error('API unavailable'); }
         const submissions = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').filter(s => s.id !== id);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
@@ -126,10 +126,14 @@ const Submissions = (() => {
 
     async function getById(id) {
         try {
-            const res = await fetch(`/api/submissions/onboarding/${id}`);
+            const res = await fetch(`/api/submissions/onboarding/${id}`, { headers: { ...authHeaders() } });
             if (res.ok) return await res.json();
         } catch (e) { console.error('API unavailable'); }
         return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]').find(s => s.id === id) || null;
+    }
+
+    function authHeaders() {
+        return typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
     }
 
     return { getAll, add, remove, getById };

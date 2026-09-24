@@ -1,8 +1,11 @@
 require('dotenv').config();
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const sgMail = require('@sendgrid/mail');
 const path = require('path');
 const { initDb, getDb, saveDb, getMailingLists, addMailingList } = require('./db');
+const { requireAuth, requireAdmin } = require('./auth-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,8 +13,17 @@ const PORT = process.env.PORT || 3000;
 // SendGrid config
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+// Security headers (CSP left disabled for now: the app relies on inline style attributes
+// and external font/icon stylesheets; a tightened CSP is a follow-up hardening task)
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Basic abuse protection on the endpoints that send emails / mutate shared data
+const submitLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+
 // Middleware
 app.use(express.json());
+app.use('/api', apiLimiter);
 
 // Block access to /server/ directory from the web
 app.use('/server', (req, res) => {
@@ -21,11 +33,11 @@ app.use('/server', (req, res) => {
 app.use(express.static(path.join(__dirname, '..')));
 
 // ===== Mailing lists (SQLite) =====
-app.get('/api/mailing-lists', (req, res) => {
+app.get('/api/mailing-lists', requireAuth, (req, res) => {
     res.json({ groups: getMailingLists() });
 });
 
-app.post('/api/mailing-lists', (req, res) => {
+app.post('/api/mailing-lists', requireAuth, (req, res) => {
     const address = (req.body.address || '').trim();
     if (!address) return res.status(400).json({ error: 'Adresse manquante' });
     addMailingList(address);
@@ -33,10 +45,10 @@ app.post('/api/mailing-lists', (req, res) => {
     res.json({ success: true, groups: getMailingLists() });
 });
 
-// ===== Submissions API (SQLite) =====
+// ===== Submissions API (SQLite) - admin/RH only =====
 
 // Onboarding
-app.get('/api/submissions/onboarding', (req, res) => {
+app.get('/api/submissions/onboarding', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     const rows = db.exec('SELECT * FROM onboarding_submissions ORDER BY submitted_at DESC');
     if (!rows.length) return res.json([]);
@@ -46,7 +58,7 @@ app.get('/api/submissions/onboarding', (req, res) => {
     res.json(submissions);
 });
 
-app.get('/api/submissions/onboarding/:id', (req, res) => {
+app.get('/api/submissions/onboarding/:id', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     const stmt = db.prepare('SELECT * FROM onboarding_submissions WHERE id = ?');
     stmt.bind([req.params.id]);
@@ -59,7 +71,7 @@ app.get('/api/submissions/onboarding/:id', (req, res) => {
     res.status(404).json({ error: 'Not found' });
 });
 
-app.delete('/api/submissions/onboarding/:id', (req, res) => {
+app.delete('/api/submissions/onboarding/:id', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     db.run('DELETE FROM onboarding_submissions WHERE id = ?', [req.params.id]);
     saveDb();
@@ -67,7 +79,7 @@ app.delete('/api/submissions/onboarding/:id', (req, res) => {
 });
 
 // Material
-app.get('/api/submissions/material', (req, res) => {
+app.get('/api/submissions/material', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     const rows = db.exec('SELECT * FROM material_submissions ORDER BY submitted_at DESC');
     if (!rows.length) return res.json([]);
@@ -77,7 +89,7 @@ app.get('/api/submissions/material', (req, res) => {
     res.json(submissions);
 });
 
-app.get('/api/submissions/material/:id', (req, res) => {
+app.get('/api/submissions/material/:id', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     const stmt = db.prepare('SELECT * FROM material_submissions WHERE id = ?');
     stmt.bind([req.params.id]);
@@ -90,7 +102,7 @@ app.get('/api/submissions/material/:id', (req, res) => {
     res.status(404).json({ error: 'Not found' });
 });
 
-app.delete('/api/submissions/material/:id', (req, res) => {
+app.delete('/api/submissions/material/:id', requireAuth, requireAdmin, (req, res) => {
     const db = getDb();
     db.run('DELETE FROM material_submissions WHERE id = ?', [req.params.id]);
     saveDb();
@@ -98,7 +110,7 @@ app.delete('/api/submissions/material/:id', (req, res) => {
 });
 
 // Email endpoint - Onboarding
-app.post('/api/send-onboarding', async (req, res) => {
+app.post('/api/send-onboarding', requireAuth, submitLimiter, async (req, res) => {
     console.log('[EMAIL] Requête reçue pour:', req.body.firstname, req.body.lastname);
     try {
         const data = req.body;
@@ -131,7 +143,7 @@ app.post('/api/send-onboarding', async (req, res) => {
 });
 
 // Email endpoint - Material request
-app.post('/api/send-material', async (req, res) => {
+app.post('/api/send-material', requireAuth, submitLimiter, async (req, res) => {
     console.log('[EMAIL] Demande matériel de:', req.body.firstname, req.body.lastname);
     try {
         const data = req.body;

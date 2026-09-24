@@ -70,8 +70,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Vérifier session existante
     const existingSession = getOktaSession();
     if (existingSession && !isSessionExpired(existingSession)) {
-        // Force re-login if session was created before groups support
-        if (!existingSession.groups) {
+        // Force re-login if session was created before groups/idToken support
+        if (!existingSession.groups || !existingSession.idToken) {
             localStorage.removeItem(OKTA_SESSION_KEY);
             startOktaLogin();
             return;
@@ -164,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 email: payload.email,
                 name: payload.name || payload.preferred_username || payload.email,
                 groups: groups,
+                idToken: idToken,
                 loggedAt: Date.now(),
                 expiresAt: payload.exp * 1000,
             };
