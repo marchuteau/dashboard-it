@@ -1720,6 +1720,23 @@ textarea::placeholder {
     border-color: var(--primary-light);
 }
 
+.summary-section--clickable {
+    cursor: pointer;
+    position: relative;
+}
+
+.summary-section--clickable:hover {
+    border-color: var(--primary);
+}
+
+.summary-section--clickable:hover h3::after {
+    content: 'Modifier ✎';
+    float: right;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--primary);
+}
+
 /* ===== Summary tags ===== */
 .summary-tag {
     transition: background 0.2s ease-out, transform 0.15s ease-out;

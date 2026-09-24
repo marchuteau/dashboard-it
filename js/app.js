@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { label: 'Email professionnel', value: document.getElementById('pro-email').value || '-' },
             { label: "Date d'arrivée", value: formatDate(document.getElementById('start-date').value) },
             { label: 'Date de fin', value: formatDate(document.getElementById('end-date').value) || 'Non définie' },
-        ]);
+        ], 1);
         container.appendChild(personalSection);
 
         // Contract
@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { label: 'Type de contrat', value: contractTypeValue },
             { label: 'Métier', value: jobValue },
             { label: 'Lieu de travail', value: workplaceValue },
-        ]);
+        ], 2);
         container.appendChild(contractSection);
 
         // Material
@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         materialRows.push({ label: 'Casque', value: headsetNeeded ? headsetNeeded.value : 'Non précisé' });
         materialRows.push({ label: 'Matériel bureau', value: deskMaterials.join(', ') || 'Aucun' });
-        const materialSection = createSummarySection('Matériel', materialRows);
+        const materialSection = createSummarySection('Matériel', materialRows, 3);
         container.appendChild(materialSection);
 
         // Applications
@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ...getCheckedValues('apps-dsi'),
             ...getCheckedValues('apps-transverses'),
         ];
-        const appsSection = createSummarySection('Applications');
+        const appsSection = createSummarySection('Applications', null, 4);
         if (allApps.length > 0) {
             const tagsDiv = document.createElement('div');
             tagsDiv.className = 'summary-tags';
@@ -369,11 +369,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const mlRows = [
             { label: 'Mailing list(s)', value: mailingValues.length > 0 ? mailingValues.join(', ') : 'Aucune' },
         ];
-        const mlSection = createSummarySection('Mailing List', mlRows);
+        const mlSection = createSummarySection('Mailing List', mlRows, 5);
         container.appendChild(mlSection);
     }
 
-    function createSummarySection(title, rows) {
+    function createSummarySection(title, rows, step) {
         const section = document.createElement('div');
         section.className = 'summary-section';
         section.innerHTML = `<h3>${escapeHtml(title)}</h3>`;
@@ -384,6 +384,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowEl.innerHTML = `<span class="label">${escapeHtml(row.label)}</span><span class="value">${escapeHtml(row.value)}</span>`;
                 section.appendChild(rowEl);
             });
+        }
+        if (step) {
+            section.classList.add('summary-section--clickable');
+            section.title = 'Cliquer pour modifier cette étape';
+            section.addEventListener('click', () => goToStep(step));
         }
         return section;
     }
